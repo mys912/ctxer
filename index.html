@@ -132,6 +132,7 @@
         
         input[type="text"],
         input[type="password"],
+        select,
         textarea {
             width: 100%;
             padding: 12px;
@@ -144,9 +145,15 @@
         
         input[type="text"]:focus,
         input[type="password"]:focus,
+        select:focus,
         textarea:focus {
             outline: none;
             border-color: #667eea;
+        }
+        
+        select {
+            cursor: pointer;
+            background-color: white;
         }
         
         textarea {
@@ -373,6 +380,15 @@
             </div>
             
             <div class="form-group">
+                <label for="modelSelect">AI Model</label>
+                <select id="modelSelect">
+                    <option value="claude-haiku-4-20250514">Haiku (Fast - ~5-10s)</option>
+                    <option value="claude-sonnet-4-5-20250929">Sonnet 4.5 (Thorough - ~30s)</option>
+                </select>
+                <div class="hint">Haiku is faster and cheaper, Sonnet is more thorough</div>
+            </div>
+            
+            <div class="form-group">
                 <label for="history">Patient History</label>
                 <textarea id="history" class="textarea-small" placeholder="Enter patient history..."></textarea>
             </div>
@@ -448,6 +464,11 @@
             if (savedHighlightMode === 'true') {
                 document.getElementById('highlightToggle').checked = true;
             }
+            
+            const savedModel = localStorage.getItem('selectedModel');
+            if (savedModel) {
+                document.getElementById('modelSelect').value = savedModel;
+            }
         });
         
         // Save custom instructions whenever they change
@@ -459,6 +480,11 @@
         document.getElementById('highlightToggle').addEventListener('change', (e) => {
             localStorage.setItem('highlightMode', e.target.checked);
         });
+        
+        // Save model preference
+        document.getElementById('modelSelect').addEventListener('change', (e) => {
+            localStorage.setItem('selectedModel', e.target.value);
+        });
 
         async function analyzeReport() {
             const apiKey = document.getElementById('apiKey').value.trim();
@@ -466,6 +492,7 @@
             const history = document.getElementById('history').value.trim();
             const customInstructions = document.getElementById('customInstructions').value.trim();
             const highlightMode = document.getElementById('highlightToggle').checked;
+            const selectedModel = document.getElementById('modelSelect').value;
             
             // Validation
             if (!apiKey) {

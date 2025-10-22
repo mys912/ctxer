@@ -319,6 +319,14 @@
             margin-top: 5px;
         }
         
+        .hint code {
+            background: #f0f0f0;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+        }
+        
         .legend {
             display: flex;
             gap: 20px;
@@ -382,7 +390,7 @@
             <div class="form-group">
                 <label for="modelSelect">AI Model</label>
                 <select id="modelSelect">
-                    <option value="claude-haiku-4-5-20251001">Haiku 4.5 (Fast - ~5-10s)</option>
+                    <option value="claude-haiku-4-5">Haiku 4.5 (Fast - ~5-10s)</option>
                     <option value="claude-sonnet-4-5-20250929">Sonnet 4.5 (Thorough - ~30s)</option>
                 </select>
                 <div class="hint">Haiku is faster and cheaper, Sonnet is more thorough</div>
@@ -469,6 +477,17 @@
             if (savedModel) {
                 document.getElementById('modelSelect').value = savedModel;
             }
+            
+            const savedModelSource = localStorage.getItem('modelSource');
+            if (savedModelSource) {
+                document.getElementById('modelSource').value = savedModelSource;
+                toggleModelSource();
+            }
+            
+            const savedOllamaModel = localStorage.getItem('ollamaModel');
+            if (savedOllamaModel) {
+                document.getElementById('ollamaModel').value = savedOllamaModel;
+            }
         });
         
         // Save custom instructions whenever they change
@@ -485,21 +504,43 @@
         document.getElementById('modelSelect').addEventListener('change', (e) => {
             localStorage.setItem('selectedModel', e.target.value);
         });
+        
+        // Save model source preference and toggle UI
+        document.getElementById('modelSource').addEventListener('change', (e) => {
+            localStorage.setItem('modelSource', e.target.value);
+            toggleModelSource();
+        });
+        
+        // Save Ollama model preference
+        document.getElementById('ollamaModel').addEventListener('change', (e) => {
+            localStorage.setItem('ollamaModel', e.target.value);
+        });
+        
+        function toggleModelSource() {
+            const source = document.getElementById('modelSource').value;
+            const apiKeyGroup = document.getElementById('apiKeyGroup');
+            const apiModelGroup = document.getElementById('modelSelect').parentElement;
+            const ollamaModelGroup = document.getElementById('ollamaModelGroup');
+            
+            if (source === 'ollama') {
+                apiKeyGroup.style.display = 'none';
+                apiModelGroup.style.display = 'none';
+                ollamaModelGroup.style.display = 'block';
+            } else {
+                apiKeyGroup.style.display = 'block';
+                apiModelGroup.style.display = 'block';
+                ollamaModelGroup.style.display = 'none';
+            }
+        }
 
         async function analyzeReport() {
-            const apiKey = document.getElementById('apiKey').value.trim();
+            const modelSource = document.getElementById('modelSource').value;
             const ctReport = document.getElementById('ctReport').value.trim();
             const history = document.getElementById('history').value.trim();
             const customInstructions = document.getElementById('customInstructions').value.trim();
             const highlightMode = document.getElementById('highlightToggle').checked;
-            const selectedModel = document.getElementById('modelSelect').value;
             
             // Validation
-            if (!apiKey) {
-                showError('Please enter your Anthropic API key');
-                return;
-            }
-            
             if (!ctReport) {
                 showError('Please enter a CT report');
                 return;
@@ -510,8 +551,15 @@
                 return;
             }
             
-            // Save API key and current report
-            localStorage.setItem('anthropicApiKey', apiKey);
+            if (modelSource === 'api') {
+                const apiKey = document.getElementById('apiKey').value.trim();
+                if (!apiKey) {
+                    showError('Please enter your Anthropic API key');
+                    return;
+                }
+                localStorage.setItem('anthropicApiKey', apiKey);
+            }
+            
             currentReport = ctReport;
             
             // Show loading

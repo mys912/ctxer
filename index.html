@@ -361,15 +361,42 @@
     <div class="container">
         <div class="header">
             <h1>🏥 CT Report Consistency Checker</h1>
-            <p>Analyze CT reports for consistency using Claude AI</p>
+            <p>Analyze CT reports for consistency using Claude AI or Local LLM</p>
         </div>
         
         <div class="content">
             <div class="settings-section">
                 <div class="form-group">
+                    <label for="modelSource">Model Source</label>
+                    <select id="modelSource">
+                        <option value="api">Anthropic API (Cloud)</option>
+                        <option value="ollama">Ollama (Local)</option>
+                    </select>
+                </div>
+                
+                <div class="form-group" id="apiKeyGroup">
                     <label for="apiKey">Anthropic API Key</label>
                     <input type="password" id="apiKey" placeholder="sk-ant-...">
                     <div class="hint">Your API key is stored locally and never sent anywhere except Anthropic's servers</div>
+                </div>
+                
+                <div class="form-group" id="apiModelGroup">
+                    <label for="modelSelect">AI Model</label>
+                    <select id="modelSelect">
+                        <option value="claude-haiku-4-5">Haiku 4.5 (Fast - ~20s)</option>
+                        <option value="claude-sonnet-4-5-20250929">Sonnet 4.5 (Thorough - ~30s)</option>
+                    </select>
+                    <div class="hint">Haiku is faster and cheaper, Sonnet is more thorough</div>
+                </div>
+                
+                <div class="form-group" id="ollamaModelGroup" style="display: none;">
+                    <label for="ollamaModel">Ollama Model</label>
+                    <select id="ollamaModel">
+                        <option value="llama3.1:8b">Llama 3.1 8B (Fast - ~3-5s)</option>
+                        <option value="qwen2.5:14b">Qwen 2.5 14B (Balanced - ~6-10s)</option>
+                        <option value="llama3.1:70b">Llama 3.1 70B (Best - ~15-20s)</option>
+                    </select>
+                    <div class="hint">Make sure Ollama is running: <code>ollama serve</code></div>
                 </div>
             </div>
             
@@ -388,15 +415,6 @@
             </div>
             
             <div class="form-group">
-                <label for="modelSelect">AI Model</label>
-                <select id="modelSelect">
-                    <option value="claude-haiku-4-5">Haiku 4.5 (Fast - ~5-10s)</option>
-                    <option value="claude-sonnet-4-5-20250929">Sonnet 4.5 (Thorough - ~30s)</option>
-                </select>
-                <div class="hint">Haiku is faster and cheaper, Sonnet is more thorough</div>
-            </div>
-            
-            <div class="form-group">
                 <label for="history">Patient History</label>
                 <textarea id="history" class="textarea-small" placeholder="Enter patient history..."></textarea>
             </div>
@@ -410,7 +428,7 @@
             
             <div id="loadingSection" class="loading" style="display: none;">
                 <div class="spinner"></div>
-                <p>Analyzing report with Claude...</p>
+                <p>Analyzing report...</p>
             </div>
             
             <div id="resultsSection" class="results-section">
@@ -506,26 +524,20 @@
         });
         
         // Save model source preference and toggle UI
-        const modelSourceEl = document.getElementById('modelSource');
-        if (modelSourceEl) {
-            modelSourceEl.addEventListener('change', (e) => {
-                localStorage.setItem('modelSource', e.target.value);
-                toggleModelSource();
-            });
-        }
+        document.getElementById('modelSource').addEventListener('change', (e) => {
+            localStorage.setItem('modelSource', e.target.value);
+            toggleModelSource();
+        });
         
         // Save Ollama model preference
-        const ollamaModelEl = document.getElementById('ollamaModel');
-        if (ollamaModelEl) {
-            ollamaModelEl.addEventListener('change', (e) => {
-                localStorage.setItem('ollamaModel', e.target.value);
-            });
-        }
+        document.getElementById('ollamaModel').addEventListener('change', (e) => {
+            localStorage.setItem('ollamaModel', e.target.value);
+        });
         
         function toggleModelSource() {
             const source = document.getElementById('modelSource').value;
             const apiKeyGroup = document.getElementById('apiKeyGroup');
-            const apiModelGroup = document.getElementById('modelSelect').parentElement;
+            const apiModelGroup = document.getElementById('apiModelGroup');
             const ollamaModelGroup = document.getElementById('ollamaModelGroup');
             
             if (source === 'ollama') {
@@ -623,48 +635,13 @@ Provide a structured analysis with clear sections.`;
             }
 
             try {
-                // Use a CORS proxy wrapper
-                const proxyUrl = 'https://corsproxy.io/?';
-                const targetUrl = encodeURIComponent('https://api.anthropic.com/v1/messages');
+                let result;
                 
-                const response = await fetch(proxyUrl + targetUrl, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'x-api-key': apiKey,
-                        'anthropic-version': '2023-06-01'
-                    },
-                    body: JSON.stringify({
-                        model: selectedModel,
-                        max_tokens: 4096,
-                        messages: [{
-                            role: 'user',
-                            content: prompt
-                        }]
-                    })
-                });
-                
-                if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error?.message || `API Error: ${response.status}`);
+                if (modelSource === 'ollama') {
+                    result = await analyzeWithOllama(prompt);
+                } else {
+                    result = await analyzeWithAnthropic(prompt);
                 }
-                
-                const responseText = await response.text();
-                console.log('Response status:', response.status);
-                console.log('Response text:', responseText);
-                
-                let data;
-                try {
-                    data = JSON.parse(responseText);
-                } catch (e) {
-                    throw new Error(`Invalid JSON response: ${responseText.substring(0, 200)}`);
-                }
-                
-                if (!response.ok) {
-                    throw new Error(data.error?.message || `API Error: ${response.status} - ${responseText}`);
-                }
-                
-                const result = data.content[0].text;
                 
                 if (highlightMode) {
                     displayHighlightedResults(result);
@@ -680,6 +657,70 @@ Provide a structured analysis with clear sections.`;
                 document.getElementById('analyzeBtn').disabled = false;
                 document.getElementById('loadingSection').style.display = 'none';
             }
+        }
+        
+        async function analyzeWithAnthropic(prompt) {
+            const apiKey = document.getElementById('apiKey').value.trim();
+            const selectedModel = document.getElementById('modelSelect').value;
+            
+            // Use a CORS proxy wrapper
+            const proxyUrl = 'https://corsproxy.io/?';
+            const targetUrl = encodeURIComponent('https://api.anthropic.com/v1/messages');
+            
+            const response = await fetch(proxyUrl + targetUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'x-api-key': apiKey,
+                    'anthropic-version': '2023-06-01'
+                },
+                body: JSON.stringify({
+                    model: selectedModel,
+                    max_tokens: 4096,
+                    messages: [{
+                        role: 'user',
+                        content: prompt
+                    }]
+                })
+            });
+            
+            const responseText = await response.text();
+            
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (e) {
+                throw new Error(`Invalid JSON response: ${responseText.substring(0, 200)}`);
+            }
+            
+            if (!response.ok) {
+                throw new Error(data.error?.message || `API Error: ${response.status} - ${responseText}`);
+            }
+            
+            return data.content[0].text;
+        }
+        
+        async function analyzeWithOllama(prompt) {
+            const ollamaModel = document.getElementById('ollamaModel').value;
+            
+            const response = await fetch('http://localhost:11434/api/generate', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    model: ollamaModel,
+                    prompt: prompt,
+                    stream: false
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`Ollama Error: ${response.status}. Make sure Ollama is running (ollama serve)`);
+            }
+            
+            const data = await response.json();
+            return data.response;
         }
         
         function displayHighlightedResults(result) {

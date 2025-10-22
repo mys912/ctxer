@@ -506,15 +506,21 @@
         });
         
         // Save model source preference and toggle UI
-        document.getElementById('modelSource').addEventListener('change', (e) => {
-            localStorage.setItem('modelSource', e.target.value);
-            toggleModelSource();
-        });
+        const modelSourceEl = document.getElementById('modelSource');
+        if (modelSourceEl) {
+            modelSourceEl.addEventListener('change', (e) => {
+                localStorage.setItem('modelSource', e.target.value);
+                toggleModelSource();
+            });
+        }
         
         // Save Ollama model preference
-        document.getElementById('ollamaModel').addEventListener('change', (e) => {
-            localStorage.setItem('ollamaModel', e.target.value);
-        });
+        const ollamaModelEl = document.getElementById('ollamaModel');
+        if (ollamaModelEl) {
+            ollamaModelEl.addEventListener('change', (e) => {
+                localStorage.setItem('ollamaModel', e.target.value);
+            });
+        }
         
         function toggleModelSource() {
             const source = document.getElementById('modelSource').value;
